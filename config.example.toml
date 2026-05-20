@@ -1,0 +1,20 @@
+[app]
+hotkey = "ctrl+shift+p"
+startup_with_windows = false
+pause_on_start = false
+
+[model]
+backend = "ollama"           # "ollama" | "lmstudio"
+host = "http://localhost:11434"
+model_name = "mistral"
+timeout_seconds = 10
+
+[persona]
+role = "software developer"
+domain = "Python, backend systems, APIs"
+style = "concise and technical, avoid filler words"
+
+[learning]
+enabled = true
+min_samples_before_adapting = 5
+history_days_to_keep = 90
