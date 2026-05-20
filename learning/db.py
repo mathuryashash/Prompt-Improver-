@@ -1,17 +1,23 @@
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "history.db"
 
 
-def get_connection() -> sqlite3.Connection:
+@contextmanager
+def get_connection():
     DB_PATH.parent.mkdir(exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
 
 
-def init_db():
+def init_db(days: int = 90):
     with get_connection() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS optimizations (
@@ -36,5 +42,5 @@ def init_db():
                 ON optimizations(app_context, timestamp);
         """)
         conn.execute(
-            "DELETE FROM optimizations WHERE timestamp < datetime('now', '-90 days')"
+            f"DELETE FROM optimizations WHERE timestamp < datetime('now', '-{days} days')"
         )
