@@ -47,7 +47,21 @@ def _generate_summary(records: list[dict], app_context: str, config) -> str:
                 json={"model": config.model_name, "prompt": prompt, "stream": False},
                 timeout=config.timeout,
             )
+            resp.raise_for_status()
             return resp.json()["response"].strip()
+        elif config.backend == "lmstudio":
+            resp = requests.post(
+                f"{config.host}/v1/chat/completions",
+                json={
+                    "model": config.model_name,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 150,
+                    "temperature": 0.3,
+                },
+                timeout=config.timeout,
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception:
         pass
 

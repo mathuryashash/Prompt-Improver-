@@ -8,7 +8,7 @@ Press a hotkey. Your raw thought becomes a precision-crafted prompt. No copy-pas
 
 ## What It Does
 
-You type a rough prompt in whichever AI tool you're using. When you're done, press **Ctrl+Shift+P** (configurable). PromptImprover:
+You type a rough prompt in whichever AI tool you're using. When you're done, press **Ctrl+Shift+.** (configurable). PromptImprover:
 
 1. Captures the text you just typed
 2. Detects which application you're working in
@@ -32,7 +32,7 @@ Everything runs locally. No prompt leaves your machine.
 | **Persona memory** | Remembers your role, domain, and communication style across sessions |
 | **Overlay UI** | Lightweight floating window — shows before/after diff, accept/edit/reject |
 | **System tray** | Runs silently in background, right-click to configure or quit |
-| **Configurable hotkey** | Default Ctrl+Shift+P, fully remappable |
+| **Configurable hotkey** | Default Ctrl+Shift+., fully remappable |
 
 ---
 
@@ -82,7 +82,7 @@ copy config.example.toml config.toml
 python main.py
 ```
 
-The app starts silently in the system tray. Open any AI tool, type a prompt, press **Ctrl+Shift+P**.
+The app starts silently in the system tray. Open any AI tool, type a prompt, press **Ctrl+Shift+.**.
 
 ---
 
@@ -124,7 +124,7 @@ promptimprover/
 
 ```toml
 [app]
-hotkey = "ctrl+shift+p"
+hotkey = "ctrl+shift+."
 startup_with_windows = true
 
 [model]
@@ -150,7 +150,7 @@ min_samples_before_adapting = 5
 ```
 User types prompt in any app
          │
-   Ctrl+Shift+P pressed
+   Ctrl+Shift+. pressed
          │
    Text captured from active field (clipboard trick)
          │
