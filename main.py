@@ -29,7 +29,7 @@ def main():
         print(f"[ERROR] Failed to parse config.toml: {e}", file=sys.stderr)
         sys.exit(1)
 
-    init_db()
+    init_db(days=config.history_days_to_keep)
 
     event_queue: queue.Queue = queue.Queue()
     paused = threading.Event()

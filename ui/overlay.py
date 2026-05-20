@@ -86,18 +86,31 @@ def show_overlay(
     btn_bar = tk.Frame(root, bg=BG_PANEL, pady=10, padx=12)
     btn_bar.pack(fill="x")
 
+    is_editing = [False]
+
     def do_accept():
         result["action"] = "accepted"
         result["text"] = opt_box.get("1.0", "end-1c")
         root.destroy()
 
     def do_edit():
+        is_editing[0] = True
         opt_box.config(state="normal", bg="#2e2e42")
         opt_box.focus_set()
         edit_btn.config(state="disabled")
         accept_btn.config(text="Accept ↵ (edited)")
 
     def do_dismiss():
+        if is_editing[0]:
+            current_text = opt_box.get("1.0", "end-1c")
+            if current_text != optimized:  # content changed
+                import tkinter.messagebox as mb
+                if not mb.askyesno(
+                    "Discard edits?",
+                    "You have unsaved edits. Discard them?",
+                    parent=root,
+                ):
+                    return  # user said No — stay in overlay
         result["action"] = "dismissed"
         result["text"] = original
         root.destroy()

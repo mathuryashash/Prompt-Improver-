@@ -17,6 +17,7 @@ class Config:
     persona_style: str
     learning_enabled: bool
     min_samples: int
+    history_days_to_keep: int
     startup_with_windows: bool
     pause_on_start: bool
     temperature: float
@@ -41,6 +42,7 @@ def load_config() -> Config:
         persona_style=raw["persona"]["style"],
         learning_enabled=raw["learning"]["enabled"],
         min_samples=raw["learning"]["min_samples_before_adapting"],
+        history_days_to_keep=raw["learning"].get("history_days_to_keep", 90),
         startup_with_windows=raw["app"].get("startup_with_windows", False),
         pause_on_start=raw["app"].get("pause_on_start", False),
         temperature=raw["model"].get("temperature", 0.4),
