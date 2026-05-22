@@ -7,7 +7,7 @@ class OptRecord:
     app_context: str
     raw_prompt: str
     opt_prompt: str
-    action: str          # 'accepted' | 'edited' | 'dismissed'
+    action: str          # 'accepted' | 'edited' | 'dismissed' | 'auto_injected'
     final_text: str | None
     model: str
     latency_ms: int
@@ -49,7 +49,7 @@ def acceptance_rate(app_context: str) -> float:
         row = conn.execute(
             """SELECT
                 COUNT(*) as total,
-                SUM(CASE WHEN action IN ('accepted','edited') THEN 1 ELSE 0 END) as accepted
+                SUM(CASE WHEN action IN ('accepted','edited','auto_injected') THEN 1 ELSE 0 END) as accepted
                FROM optimizations WHERE app_context = ?""",
             (app_context,),
         ).fetchone()

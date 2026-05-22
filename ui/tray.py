@@ -7,8 +7,10 @@ from pathlib import Path
 import pystray
 from PIL import Image, ImageDraw
 
+from core.paths import get_resource_path, get_user_data_path
+
 APP_NAME = "PromptImprover"
-ICON_PATH = Path(__file__).parent.parent / "assets" / "icon.png"
+ICON_PATH = get_resource_path("assets/icon.png")
 
 
 def run_tray(paused: threading.Event, event_queue: queue.Queue):
@@ -27,7 +29,7 @@ def run_tray(paused: threading.Event, event_queue: queue.Queue):
             icon.notify("PromptImprover paused", "Hotkey is suspended.")
 
     def open_config(icon, item):
-        config_path = Path(__file__).parent.parent / "config.toml"
+        config_path = get_user_data_path("config.toml")
         subprocess.Popen(["notepad.exe", str(config_path)])
 
     def view_history(icon, item):

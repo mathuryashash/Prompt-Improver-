@@ -1,20 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PromptImprover — config.example.toml
+#
+# Copy this file to config.toml and edit to suit your setup.
+# Location: %APPDATA%\PromptImprover\config.toml  (auto-created on first run)
+# ─────────────────────────────────────────────────────────────────────────────
+
 [app]
+# Keyboard shortcut that opens the comparison overlay (Before / After view).
 hotkey = "ctrl+shift+."
-startup_with_windows = false
+
+# Launch PromptImprover automatically when Windows starts.
+startup_with_windows = true
+
+# Start in paused mode (icon will show a "paused" state on first launch).
 pause_on_start = false
 
+
 [model]
-backend = "ollama"           # "ollama" | "lmstudio"
+# Backend to use. Supported values: "ollama" | "lmstudio"
+backend = "ollama"
+
+# Base URL of the backend API.
 host = "http://localhost:11434"
-model_name = "mistral"
-timeout_seconds = 10
+
+# Model to use for prompt optimisation.
+# Ollama examples : "llama3.2:3b", "mistral:latest", "qwen2.5:7b"
+# LM Studio       : match the model identifier shown in the LM Studio UI
+model_name = "llama3.2:3b"
+
+# Seconds to wait for the model before aborting.
+timeout_seconds = 30
+
+# Creativity / randomness.
+#   0.2 = very consistent, factual
+#   0.4 = balanced (recommended)
+#   0.7 = more creative, varied
+temperature = 0.4
+
 
 [persona]
+# Describe yourself so the model tailors its rewrites to your context.
+
+# Your professional role (e.g. "data scientist", "UX designer", "PhD researcher")
 role = "software developer"
+
+# Technologies / domains you work in.
 domain = "Python, backend systems, APIs"
+
+# Preferred writing style for rewritten prompts.
 style = "concise and technical, avoid filler words"
 
+
 [learning]
+# Enable adaptive learning (model improves based on your accept/reject history).
 enabled = true
+
+# Minimum number of accepted/rejected samples before the model starts adapting.
 min_samples_before_adapting = 5
+
+# How many days of history to keep in the local SQLite database.
 history_days_to_keep = 90

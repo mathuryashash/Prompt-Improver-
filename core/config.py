@@ -1,8 +1,9 @@
 import tomllib
-from pathlib import Path
 from dataclasses import dataclass
 
-CONFIG_PATH = Path(__file__).parent.parent / "config.toml"
+from core.paths import get_user_data_path
+
+CONFIG_PATH = get_user_data_path("config.toml")
 
 
 @dataclass

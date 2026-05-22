@@ -1,8 +1,9 @@
 import sqlite3
 from contextlib import contextmanager
-from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "data" / "history.db"
+from core.paths import get_user_data_path
+
+DB_PATH = get_user_data_path("data/history.db")
 
 
 @contextmanager
@@ -42,5 +43,6 @@ def init_db(days: int = 90):
                 ON optimizations(app_context, timestamp);
         """)
         conn.execute(
-            f"DELETE FROM optimizations WHERE timestamp < datetime('now', '-{days} days')"
+            "DELETE FROM optimizations WHERE timestamp < datetime('now', ? || ' days')",
+            (f"-{int(days)}",)
         )

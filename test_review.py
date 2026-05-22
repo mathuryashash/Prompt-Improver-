@@ -3,7 +3,6 @@ PromptImprover — automated review test script.
 Tests all components that can be exercised without a running Ollama instance.
 """
 import sys
-import time
 import traceback
 
 PASS = "  ✓"
@@ -55,7 +54,7 @@ test("DB initialises (both tables present)", t_db_init)
 
 
 def t_db_record_and_query():
-    from learning.db import init_db, get_connection
+    from learning.db import init_db
     from learning.history import record, get_recent, acceptance_rate, OptRecord
     init_db()
     # Write a test record
@@ -209,7 +208,7 @@ try:
     models = [m["name"] for m in r.json().get("models", [])]
     print(f"{PASS} Ollama connectivity — RUNNING, models: {models}")
     results.append((True, "Ollama connectivity", f"models={models}"))
-except Exception as e:
+except Exception:
     print(f"{WARN} Ollama connectivity — NOT RUNNING (app will show error overlay gracefully)")
     results.append((None, "Ollama connectivity", "not running — non-fatal"))
 

@@ -1,4 +1,4 @@
-pynput==1.7.6
+pynput==1.8.2
 pywin32==311
 pyperclip==1.8.2
 pyautogui==0.9.54
@@ -6,4 +6,3 @@ requests==2.31.0
 pystray==0.19.5
 Pillow==11.2.1
 psutil==5.9.8
-Flask==3.1.2

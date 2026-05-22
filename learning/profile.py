@@ -22,7 +22,7 @@ def get_history_signal(app_context: str, config, min_samples: int = 5) -> str | 
 
 
 def _generate_summary(records: list[dict], app_context: str, config) -> str:
-    accepted = [r for r in records if r["action"] in ("accepted", "edited")]
+    accepted = [r for r in records if r["action"] in ("accepted", "edited", "auto_injected")]
     dismissed = [r for r in records if r["action"] == "dismissed"]
 
     prompt = (
@@ -76,8 +76,8 @@ def _get_cached_summary(app_context: str) -> str | None:
         ).fetchone()
     if not row:
         return None
-    updated = datetime.datetime.fromisoformat(row["updated_at"])
-    age = (datetime.datetime.utcnow() - updated).total_seconds()
+    updated = datetime.datetime.fromisoformat(row["updated_at"]).replace(tzinfo=datetime.timezone.utc)
+    age = (datetime.datetime.now(datetime.timezone.utc) - updated).total_seconds()
     if age > CACHE_TTL_SECONDS:
         return None
     return row["summary"]

@@ -1,13 +1,16 @@
 import json
 import re
 import time
-from pathlib import Path
 
 import requests
 from dataclasses import dataclass
 from core.app_detector import AppContext
 
-_TEMPLATE_PATH = Path(__file__).parent.parent / "prompt_templates" / "meta_prompt.json"
+from core.paths import get_resource_path
+
+_TEMPLATE_PATH = get_resource_path("prompt_templates/meta_prompt.json")
+
+MAX_PROMPT_CHARS = 3000
 
 # Lines that indicate the model leaked meta-commentary after the rewrite
 _STRIP_PATTERNS = [
@@ -56,6 +59,12 @@ class Optimizer:
         persona_style: str,
         history_signal: str | None = None,
     ) -> OptimizationResult:
+        if len(raw_prompt) > MAX_PROMPT_CHARS:
+            raise ValueError(
+                f"Prompt too long ({len(raw_prompt):,} chars). "
+                f"Select a specific section (max {MAX_PROMPT_CHARS:,} chars)."
+            )
+
         messages = self._build_messages(
             raw_prompt, app_context, persona_role,
             persona_domain, persona_style, history_signal,
@@ -89,20 +98,10 @@ class Optimizer:
             messages.append({"role": "user", "content": ex["user"]})
             messages.append({"role": "assistant", "content": ex["assistant"]})
 
-        # 3. App conventions for the active context
+        # 3. Build single consolidated user message with conventions, persona, and raw prompt
         conventions = t.get("conventions", {})
         app_convention = conventions.get(ctx.id, conventions.get("generic", ""))
-        if app_convention:
-            messages.append({
-                "role": "user",
-                "content": f"TARGET APP: {ctx.display_name}\nConventions: {app_convention}",
-            })
-            messages.append({
-                "role": "assistant",
-                "content": f"Understood. I will tailor the rewrite for {ctx.display_name}.",
-            })
 
-        # 4. User persona + optional learning signal
         persona_lines = [
             "USER PERSONA:",
             f"- Role: {role}",
@@ -111,17 +110,21 @@ class Optimizer:
         ]
         if signal:
             persona_lines += ["", "BEHAVIOUR PATTERN:", signal]
-        messages.append({"role": "user", "content": "\n".join(persona_lines)})
-        messages.append({
-            "role": "assistant",
-            "content": "Got it. I will match this persona and style in the rewrite.",
-        })
 
-        # 5. The actual prompt to optimize + recency cue (most critical instruction last)
-        recency_cue = t.get("recency_cue", "Output ANALYSIS: then OPTIMIZED PROMPT:")
+        user_parts = [
+            f"TARGET APP: {ctx.display_name}",
+        ]
+        if app_convention:
+            user_parts.append(f"App Conventions: {app_convention}")
+        user_parts.append("\n".join(persona_lines))
+        user_parts.append(f"RAW PROMPT: {raw}")
+        
+        recency_cue = t.get("recency_cue", "Output THOUGHT: and OPTIMIZED PROMPT: following the critical rules.")
+        user_parts.append(recency_cue)
+
         messages.append({
             "role": "user",
-            "content": f"RAW PROMPT: {raw}\n\n{recency_cue}",
+            "content": "\n\n".join(user_parts)
         })
 
         return messages
@@ -169,12 +172,9 @@ class Optimizer:
 
 def _extract_optimized_prompt(text: str) -> str:
     """
-    Parse the model's two-section output:
-      ANALYSIS: ...
-      OPTIMIZED PROMPT: ...
-
-    Returns only the OPTIMIZED PROMPT section, stripped of meta-commentary.
-    Falls back to the full output if the section marker isn't found.
+    Parse the model's output to extract only the OPTIMIZED PROMPT section,
+    stripped of meta-commentary.
+    Falls back to cleaning and returning the full output if the marker isn't found.
     """
     text = text.strip()
 
@@ -192,10 +192,13 @@ def _extract_optimized_prompt(text: str) -> str:
             return _strip_trailing_noise(optimized)
 
     # Fallback: model didn't use the format — clean and return everything
-    # (strip any leading ANALYSIS section if present)
-    analysis_match = re.search(r"^ANALYSIS:.*?\n\n", text, re.IGNORECASE | re.DOTALL)
+    # (strip any leading ANALYSIS or THOUGHT section if present)
+    analysis_match = re.search(r"^ANALYSIS:.*?\n+", text, re.IGNORECASE | re.DOTALL)
     if analysis_match:
         text = text[analysis_match.end():].strip()
+    thought_match = re.search(r"^THOUGHT:.*?\n+", text, re.IGNORECASE | re.DOTALL)
+    if thought_match:
+        text = text[thought_match.end():].strip()
 
     return _strip_trailing_noise(text)
 
@@ -208,4 +211,5 @@ def _strip_trailing_noise(text: str) -> str:
         if any(re.search(p, line) for p in _STRIP_PATTERNS):
             break
         clean.append(line)
-    return "\n".join(clean).rstrip()
+    result = "\n".join(clean).rstrip()
+    return result if result.strip() else text  # never return empty — fallback to original

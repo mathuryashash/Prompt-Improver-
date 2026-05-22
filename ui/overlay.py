@@ -38,7 +38,6 @@ def show_overlay(
     _center_window(root, 640, 520)
 
     mono = tkfont.Font(family="Consolas", size=10)
-    sans = tkfont.Font(family="Segoe UI", size=10)
     sans_bold = tkfont.Font(family="Segoe UI", size=10, weight="bold")
     small = tkfont.Font(family="Segoe UI", size=9)
 

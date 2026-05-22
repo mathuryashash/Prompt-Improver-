@@ -1,25 +1,62 @@
+import ctypes
 import queue
 import sys
 import threading
 import tkinter as tk
 
+import pyautogui
 import requests.exceptions
 
 from core.config import load_config
 from core.hotkey_listener import HotkeyListener
 from core.mouse_listener import RightClickListener
-from core.text_capture import capture, capture_field, inject, inject_paste, get_active_hwnd
+from core.text_capture import capture, capture_field, inject, get_active_hwnd
 from core.app_detector import detect
 from core.optimizer import Optimizer
 from learning.db import init_db
 from learning.history import record, OptRecord
 from learning.profile import get_history_signal
 from ui.overlay import show_overlay
-from ui.context_menu import show_optimize_button
+from ui.context_menu import show_optimize_button, LoadingIndicator
 from ui.tray import run_tray
+
+# ── Single-instance guard ─────────────────────────────────────────────────────
+# Creates a named Win32 mutex. If it already exists another instance is running,
+# so we exit immediately — preventing a duplicate tray icon.
+_MUTEX_NAME = "Global\\PromptImprover_SingleInstance"
+_mutex_handle = None   # kept alive for the lifetime of the process
+
+
+def _acquire_single_instance() -> bool:
+    """Return True if this is the first instance, False if another is running."""
+    global _mutex_handle
+    _mutex_handle = ctypes.windll.kernel32.CreateMutexW(None, True, _MUTEX_NAME)
+    last_err = ctypes.windll.kernel32.GetLastError()
+    ERROR_ALREADY_EXISTS = 183
+    if last_err == ERROR_ALREADY_EXISTS:
+        # Release the handle we just opened (we didn't really own it)
+        if _mutex_handle:
+            ctypes.windll.kernel32.CloseHandle(_mutex_handle)
+            _mutex_handle = None
+        return False
+    return True
 
 
 def main():
+    # ── Prevent duplicate instances ───────────────────────────────────────────
+    if not _acquire_single_instance():
+        # Another instance is already in the tray — tell the user and exit.
+        try:
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                "PromptImprover is already running.\n\nFind its icon in the system tray (bottom-right corner).",
+                "PromptImprover",
+                0x40 | 0x1000,   # MB_ICONINFORMATION | MB_SYSTEMMODAL
+            )
+        except Exception:
+            pass
+        sys.exit(0)
+
     try:
         config = load_config()
     except FileNotFoundError as e:
@@ -30,6 +67,16 @@ def main():
         sys.exit(1)
 
     init_db(days=config.history_days_to_keep)
+
+    # Apply startup-with-Windows registry setting
+    try:
+        from ui.tray import enable_startup, disable_startup
+        if config.startup_with_windows:
+            enable_startup()
+        else:
+            disable_startup()
+    except Exception as e:
+        print(f"[WARN] Could not set startup registry entry: {e}")
 
     event_queue: queue.Queue = queue.Queue()
     paused = threading.Event()
@@ -50,7 +97,7 @@ def main():
 
     optimizer = Optimizer(config)
 
-    print(f"PromptImprover running.")
+    print("PromptImprover running.")
     print(f"  Right-click anywhere to optimize (or press {config.hotkey} for the comparison view).")
 
     try:
@@ -99,6 +146,26 @@ def _run_optimization(config, optimizer, raw_text, app_ctx):
     )
 
 
+def _handle_llm_error(e: Exception, config):
+    """Shared LLM error handler for both right-click and hotkey flows."""
+    if isinstance(e, requests.exceptions.ConnectionError):
+        _show_error_overlay("Ollama is not running.\n\nStart it with:\n  ollama serve")
+    elif isinstance(e, requests.exceptions.Timeout):
+        _show_error_overlay(f"Optimization timed out ({config.timeout}s).\n\nTry a smaller model.")
+    elif isinstance(e, requests.exceptions.HTTPError):
+        if e.response is not None and e.response.status_code == 404:
+            _show_error_overlay(
+                f"Model '{config.model_name}' not found in Ollama.\n\n"
+                f"Pull it first:\n  ollama pull {config.model_name}"
+            )
+        else:
+            _show_error_overlay(f"LLM server error:\n{e}")
+    elif isinstance(e, ValueError):
+        _show_error_overlay(f"Input error:\n{e}")
+    else:
+        _show_error_overlay(f"Unexpected error:\n{e}")
+
+
 def _handle_right_click(config, optimizer, cursor_x: int, cursor_y: int):
     """
     Right-click flow:
@@ -122,25 +189,15 @@ def _handle_right_click(config, optimizer, cursor_x: int, cursor_y: int):
 
     app_ctx = detect()
 
+    loader = LoadingIndicator(cursor_x, cursor_y, app_ctx.display_name)
+    loader.start()
     try:
-        result = _run_optimization(config, optimizer, raw_text, app_ctx)
-    except requests.exceptions.ConnectionError:
-        _show_error_overlay("Ollama is not running.\n\nStart it with:\n  ollama serve")
-        return
-    except requests.exceptions.Timeout:
-        _show_error_overlay(f"Optimization timed out ({config.timeout}s).\n\nTry a smaller model.")
-        return
-    except requests.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 404:
-            _show_error_overlay(
-                f"Model '{config.model_name}' not found in Ollama.\n\n"
-                f"Pull it first:\n  ollama pull {config.model_name}"
-            )
-        else:
-            _show_error_overlay(f"LLM server error:\n{e}")
-        return
+        try:
+            result = _run_optimization(config, optimizer, raw_text, app_ctx)
+        finally:
+            loader.stop()
     except Exception as e:
-        _show_error_overlay(f"Unexpected error:\n{e}")
+        _handle_llm_error(e, config)
         return
 
     # Inject directly — no overlay, source window gets the optimized text
@@ -152,7 +209,7 @@ def _handle_right_click(config, optimizer, cursor_x: int, cursor_y: int):
             app_context=app_ctx.id,
             raw_prompt=raw_text,
             opt_prompt=result.optimized_text,
-            action="accepted",
+            action="auto_injected",
             final_text=result.optimized_text,
             model=result.model,
             latency_ms=result.latency_ms,
@@ -173,25 +230,16 @@ def _handle_hotkey(config, optimizer):
 
     app_ctx = detect()
 
+    cursor_x, cursor_y = pyautogui.position()
+    loader = LoadingIndicator(cursor_x, cursor_y, app_ctx.display_name)
+    loader.start()
     try:
-        result = _run_optimization(config, optimizer, raw_text, app_ctx)
-    except requests.exceptions.ConnectionError:
-        _show_error_overlay("Ollama is not running.\n\nStart it with:\n  ollama serve")
-        return
-    except requests.exceptions.Timeout:
-        _show_error_overlay(f"Optimization timed out ({config.timeout}s).\n\nTry a smaller model.")
-        return
-    except requests.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 404:
-            _show_error_overlay(
-                f"Model '{config.model_name}' not found in Ollama.\n\n"
-                f"Pull it first:\n  ollama pull {config.model_name}"
-            )
-        else:
-            _show_error_overlay(f"LLM server error:\n{e}")
-        return
+        try:
+            result = _run_optimization(config, optimizer, raw_text, app_ctx)
+        finally:
+            loader.stop()
     except Exception as e:
-        _show_error_overlay(f"Unexpected error:\n{e}")
+        _handle_llm_error(e, config)
         return
 
     overlay_result = show_overlay(
@@ -219,6 +267,8 @@ def _handle_hotkey(config, optimizer):
 
 def _show_toast(msg: str):
     def _run():
+        # TODO: Refactor to use tk.Toplevel() from a persistent root to avoid
+        # multiple tk.Tk() instances across threads (known tkinter limitation).
         win = tk.Tk()
         win.title("PromptImprover")
         win.attributes("-topmost", True)
@@ -241,6 +291,7 @@ def _show_toast(msg: str):
 
 def _show_error_overlay(msg: str):
     def _run():
+        # TODO: Refactor to use tk.Toplevel() from a persistent root.
         win = tk.Tk()
         win.title("PromptImprover — Error")
         win.attributes("-topmost", True)
@@ -272,6 +323,7 @@ def _show_history_window():
     from learning.db import get_connection
 
     def _run():
+        # TODO: Refactor to use tk.Toplevel() from a persistent root.
         with get_connection() as conn:
             rows = conn.execute(
                 """SELECT timestamp, app_context, action, latency_ms
@@ -304,7 +356,7 @@ def _show_history_window():
         lb.pack(fill="both", expand=True)
         sb.config(command=lb.yview)
 
-        action_icons = {"accepted": "✓", "edited": "✎", "dismissed": "✗"}
+        action_icons = {"accepted": "✓", "edited": "✎", "dismissed": "✗", "auto_injected": "⚡"}
         for r in rows:
             icon = action_icons.get(r["action"], "?")
             ms = f"{r['latency_ms']}ms" if r["latency_ms"] else "—"
