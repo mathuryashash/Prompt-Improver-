@@ -87,7 +87,11 @@ def show_overlay(
 
     is_editing = [False]
 
+    timer_id = [None]
+    
     def do_accept():
+        if timer_id[0] is not None:
+            root.after_cancel(timer_id[0])
         result["action"] = "accepted"
         result["text"] = opt_box.get("1.0", "end-1c")
         root.destroy()
@@ -110,6 +114,8 @@ def show_overlay(
                     parent=root,
                 ):
                     return  # user said No — stay in overlay
+        if timer_id[0] is not None:
+            root.after_cancel(timer_id[0])
         result["action"] = "dismissed"
         result["text"] = original
         root.destroy()
@@ -148,7 +154,7 @@ def show_overlay(
             do_dismiss()
             return
         countdown_var.set(f"auto-dismiss in {remaining[0]}s")
-        root.after(1000, tick)
+        timer_id[0] = root.after(1000, tick)
 
     def reset_countdown(event=None):
         remaining[0] = AUTO_DISMISS_SECONDS
@@ -156,7 +162,7 @@ def show_overlay(
     root.bind("<Motion>", reset_countdown)
     root.bind("<Key>", reset_countdown)
     root.bind("<Button>", reset_countdown)
-    root.after(1000, tick)
+    timer_id[0] = root.after(1000, tick)
 
     root.focus_force()
     root.mainloop()

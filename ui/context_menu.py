@@ -74,8 +74,19 @@ def show_optimize_button(x: int, y: int) -> bool:
     _make_no_activate(win)
 
     # Auto-dismiss
-    win.after(2500, win.destroy)
-    win.bind("<Escape>", lambda _: win.destroy())
+    timer_id = win.after(2500, win.destroy)
+    
+    def on_escape(event):
+        win.after_cancel(timer_id)
+        win.destroy()
+
+    def on_optimize_click():
+        clicked[0] = True
+        win.after_cancel(timer_id)
+        win.destroy()
+
+    btn.config(command=on_optimize_click)
+    win.bind("<Escape>", on_escape)
 
     win.mainloop()
     return clicked[0]
@@ -172,11 +183,11 @@ class LoadingIndicator:
                     tags="spinner",
                 )
                 self.angle = (self.angle + 15) % 360
-                self.win.after(30, animate)
+                self.anim_timer = self.win.after(30, animate)
             except Exception:
                 pass
 
-        self.win.after(30, animate)
+        self.anim_timer = self.win.after(30, animate)
         self.win.mainloop()
 
     def stop(self):
